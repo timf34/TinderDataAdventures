@@ -37,12 +37,12 @@ class JSONSchemaAnalyzer:
             '%d-%m-%Y': 'dd-mm-yyyy',  # 08-11-2021
             '%Y/%m/%d': 'yyyy/mm/dd',  # 2021/11/08
             '%d/%m/%Y': 'dd/mm/yyyy',  # 08/11/2021
-            '%Y%m%d': 'yyyymmdd',      # 20211108
-            '%d%m%Y': 'ddmmyyyy',      # 08112021
+            '%Y%m%d': 'yyyymmdd',  # 20211108
+            '%d%m%Y': 'ddmmyyyy',  # 08112021
             '%B %d, %Y': 'month dd, yyyy',  # November 08, 2021
-            '%d %B %Y': 'dd month yyyy',    # 08 November 2021
-            '%Y-%m': 'yyyy-mm',        # 2021-11
-            '%m-%Y': 'mm-yyyy',        # 11-2021
+            '%d %B %Y': 'dd month yyyy',  # 08 November 2021
+            '%Y-%m': 'yyyy-mm',  # 2021-11
+            '%m-%Y': 'mm-yyyy',  # 11-2021
         }
 
         for strftime_pattern, readable_pattern in date_patterns.items():
@@ -102,8 +102,36 @@ class JSONSchemaAnalyzer:
             first_record = next(iter(json_data.values()))
             self._analyze_value("", first_record)
 
+    def _merge_schema_objects(self, obj1: Dict, obj2: Dict) -> Dict:
+        """Merge two schema objects, properly handling arrays and nested objects."""
+        if not isinstance(obj1, dict) or not isinstance(obj2, dict):
+            return obj1
+
+        result = obj1.copy()
+
+        # Special handling for 'items' in arrays
+        if 'type' in result and result['type'] == 'array' and 'items' in result and 'items' in obj2:
+            if isinstance(result['items'], dict) and isinstance(obj2['items'], dict):
+                result['items'] = self._merge_schema_objects(result['items'], obj2['items'])
+            return result
+
+        # Special handling for 'properties' in objects
+        if 'properties' in result and 'properties' in obj2:
+            result['properties'] = self._merge_schema_objects(result['properties'], obj2['properties'])
+            return result
+
+        # Merge other keys
+        for key, value in obj2.items():
+            if key not in result:
+                result[key] = value
+            elif isinstance(value, dict) and isinstance(result[key], dict):
+                result[key] = self._merge_schema_objects(result[key], value)
+
+        return result
+
     def _build_nested_schema(self) -> Dict:
         """Convert flat schema structure to nested dictionary."""
+
         def create_nested_dict(path_parts: list, value: Dict) -> Dict:
             if not path_parts:
                 result = {'type': value['type']}
@@ -132,22 +160,22 @@ class JSONSchemaAnalyzer:
                 }
 
         result = {}
-        for path, info in sorted(self.schema_structure.items()):
+
+        # Sort paths to ensure parent objects are processed before their children
+        sorted_paths = sorted(self.schema_structure.items(), key=lambda x: len(x[0].split('.')))
+
+        for path, info in sorted_paths:
             if not path:  # root level
                 continue
 
             path_parts = path.split('.')
             current_dict = create_nested_dict(path_parts, info)
 
-            # Merge with existing schema
             for key, value in current_dict.items():
-                if key in result:
-                    if 'properties' in result[key] and 'properties' in value:
-                        result[key]['properties'].update(value['properties'])
-                    else:
-                        result[key].update(value)
-                else:
+                if key not in result:
                     result[key] = value
+                else:
+                    result[key] = self._merge_schema_objects(result[key], value)
 
         return result
 
