@@ -9,7 +9,7 @@ from rich.syntax import Syntax
 class JSONSchemaAnalyzer:
     def __init__(self):
         self.schema_structure = {}
-        self.max_unique_samples = 10
+        self.max_unique_samples = 5
         self.date_counters = defaultdict(int)
 
     @staticmethod
