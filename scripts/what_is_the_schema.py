@@ -1,6 +1,6 @@
 import json
 from collections import defaultdict
-from typing import Dict, Any, Union, Tuple
+from typing import Dict, Any, Union, Tuple, Set
 from datetime import datetime
 from rich.console import Console
 from rich.syntax import Syntax
@@ -11,6 +11,8 @@ class JSONSchemaAnalyzer:
         self.schema_structure = {}
         self.max_unique_samples = 5
         self.date_counters = defaultdict(int)
+        self.field_occurrence = defaultdict(int)
+        self.total_objects_analyzed = 0
 
     @staticmethod
     def _get_type_name(value: Any) -> str:
@@ -77,6 +79,9 @@ class JSONSchemaAnalyzer:
         normalized_path = self._normalize_path(path)
         value_type = self._get_type_name(value)
 
+        # Increment occurrence counter for this path
+        self.field_occurrence[normalized_path] += 1
+
         if normalized_path not in self.schema_structure:
             self.schema_structure[normalized_path] = {
                 'type': value_type,
@@ -95,12 +100,17 @@ class JSONSchemaAnalyzer:
             self._analyze_value(f"{normalized_path}[]", value[0])
 
     def analyze_json(self, json_data: Union[Dict, list]) -> None:
+        """Analyze multiple objects from the JSON data."""
         if isinstance(json_data, list):
-            for record in json_data[:1]:
+            # Analyze up to first 3 objects
+            for i, record in enumerate(json_data[:3]):
                 self._analyze_value("", record)
+                self.total_objects_analyzed += 1
         else:
-            first_record = next(iter(json_data.values()))
-            self._analyze_value("", first_record)
+            # If it's a dictionary, analyze up to first 3 values
+            for i, (_, record) in enumerate(list(json_data.items())[:3]):
+                self._analyze_value("", record)
+                self.total_objects_analyzed += 1
 
     def _merge_schema_objects(self, obj1: Dict, obj2: Dict) -> Dict:
         """Merge two schema objects, properly handling arrays and nested objects."""
@@ -132,11 +142,14 @@ class JSONSchemaAnalyzer:
     def _build_nested_schema(self) -> Dict:
         """Convert flat schema structure to nested dictionary."""
 
-        def create_nested_dict(path_parts: list, value: Dict) -> Dict:
+        def create_nested_dict(path_parts: list, value: Dict, full_path: str) -> Dict:
             if not path_parts:
                 result = {'type': value['type']}
                 if value['samples']:
                     result['examples'] = list(value['samples'])
+                # Add required/optional status based on field occurrence
+                if self.field_occurrence[full_path] < self.total_objects_analyzed:
+                    result['optional'] = True
                 return result
 
             current_part = path_parts[0]
@@ -147,11 +160,11 @@ class JSONSchemaAnalyzer:
                 return {
                     current_part: {
                         'type': 'array',
-                        'items': create_nested_dict(remaining_parts, value)
+                        'items': create_nested_dict(remaining_parts, value, full_path)
                     }
                 }
             else:
-                nested = create_nested_dict(remaining_parts, value)
+                nested = create_nested_dict(remaining_parts, value, full_path)
                 return {
                     current_part: nested if not remaining_parts else {
                         'type': 'object',
@@ -169,7 +182,7 @@ class JSONSchemaAnalyzer:
                 continue
 
             path_parts = path.split('.')
-            current_dict = create_nested_dict(path_parts, info)
+            current_dict = create_nested_dict(path_parts, info, path)
 
             for key, value in current_dict.items():
                 if key not in result:
