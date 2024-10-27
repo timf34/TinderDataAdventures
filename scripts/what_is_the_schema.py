@@ -1,6 +1,6 @@
 import json
 from collections import defaultdict
-from typing import Dict, Set, Any, Union
+from typing import Dict, Any, Union, Tuple
 from datetime import datetime
 from rich.console import Console
 from rich.syntax import Syntax
@@ -30,32 +30,31 @@ class JSONSchemaAnalyzer:
             return 'object'
         return str(type(value).__name__)
 
-    @staticmethod
-    def _is_date(key: str) -> bool:
-        """Check if a string is a date in various formats."""
-        date_patterns = [
-            '%Y-%m-%d',  # 2021-11-08
-            '%d-%m-%Y',  # 08-11-2021
-            '%Y/%m/%d',  # 2021/11/08
-            '%d/%m/%Y',  # 08/11/2021
-            '%Y%m%d',  # 20211108
-            '%d%m%Y',  # 08112021
-            '%B %d, %Y',  # November 08, 2021
-            '%d %B %Y',  # 08 November 2021
-            '%Y-%m',  # 2021-11
-            '%m-%Y',  # 11-2021
-        ]
+    def _detect_date_pattern(self, key: str) -> Tuple[bool, str]:
+        """Check if a string is a date and return its pattern format."""
+        date_patterns = {
+            '%Y-%m-%d': 'yyyy-mm-dd',  # 2021-11-08
+            '%d-%m-%Y': 'dd-mm-yyyy',  # 08-11-2021
+            '%Y/%m/%d': 'yyyy/mm/dd',  # 2021/11/08
+            '%d/%m/%Y': 'dd/mm/yyyy',  # 08/11/2021
+            '%Y%m%d': 'yyyymmdd',      # 20211108
+            '%d%m%Y': 'ddmmyyyy',      # 08112021
+            '%B %d, %Y': 'month dd, yyyy',  # November 08, 2021
+            '%d %B %Y': 'dd month yyyy',    # 08 November 2021
+            '%Y-%m': 'yyyy-mm',        # 2021-11
+            '%m-%Y': 'mm-yyyy',        # 11-2021
+        }
 
-        for pattern in date_patterns:
+        for strftime_pattern, readable_pattern in date_patterns.items():
             try:
-                datetime.strptime(key, pattern)
-                return True
+                datetime.strptime(key, strftime_pattern)
+                return True, readable_pattern
             except ValueError:
                 continue
-        return False
+        return False, ''
 
     def _normalize_path(self, path: str) -> str:
-        """Convert date-based keys to a normalized format."""
+        """Convert date-based keys to a normalized format with pattern."""
         if not path:
             return path
 
@@ -63,9 +62,10 @@ class JSONSchemaAnalyzer:
         normalized_parts = []
 
         for part in parts:
-            if self._is_date(part):
+            is_date, pattern = self._detect_date_pattern(part)
+            if is_date:
                 level = len(normalized_parts)
-                date_key = f"date_{level}"
+                date_key = f"{pattern}_{level}"
                 normalized_parts.append(date_key)
             else:
                 normalized_parts.append(part)
@@ -104,7 +104,6 @@ class JSONSchemaAnalyzer:
 
     def _build_nested_schema(self) -> Dict:
         """Convert flat schema structure to nested dictionary."""
-
         def create_nested_dict(path_parts: list, value: Dict) -> Dict:
             if not path_parts:
                 result = {'type': value['type']}
