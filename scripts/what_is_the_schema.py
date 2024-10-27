@@ -2,8 +2,6 @@ import json
 from collections import defaultdict
 from typing import Dict, Set, Any, Union
 from datetime import datetime
-import re
-from rich import print
 from rich.console import Console
 from rich.syntax import Syntax
 
@@ -14,7 +12,8 @@ class JSONSchemaAnalyzer:
         self.max_unique_samples = 10
         self.date_counters = defaultdict(int)
 
-    def _get_type_name(self, value: Any) -> str:
+    @staticmethod
+    def _get_type_name(value: Any) -> str:
         if value is None:
             return 'null'
         elif isinstance(value, bool):
@@ -31,7 +30,8 @@ class JSONSchemaAnalyzer:
             return 'object'
         return str(type(value).__name__)
 
-    def _is_date(self, key: str) -> bool:
+    @staticmethod
+    def _is_date(key: str) -> bool:
         """Check if a string is a date in various formats."""
         date_patterns = [
             '%Y-%m-%d',  # 2021-11-08
