@@ -124,34 +124,85 @@ def calculate_account_age(create_date_str):
 
 
 def generate_popularity_report(df):
-    """Generate a detailed popularity report with various metrics."""
+    """Generate a detailed popularity report with comprehensive statistics."""
     print("\n=== Tinder User Popularity Analysis ===\n")
 
-    # Overall statistics
-    print("Overall Statistics:")
-    print(f"Total users analyzed: {len(df)}")
-    print(f"Average matches per user: {df['total_matches'].mean():.2f}")
-    print(f"Average match rate: {df['match_rate'].mean():.2%}")
-    print(f"Average messages received per match: {df['messages_per_match'].mean():.2f}")
-    print(f"Average response rate: {df['response_rate'].mean():.2%}")
+    # Function to print stats for a metric
+    def print_metric_stats(metric_name, series):
+        print(f"\n{metric_name} Statistics:")
+        print(f"  Mean: {series.mean():.2f}")
+        print(f"  Median: {series.median():.2f}")
+        print(f"  Std Dev: {series.std():.2f}")
+        print(f"  Min: {series.min():.2f}")
+        print(f"  Max: {series.max():.2f}")
 
+    # Overall statistics
+    print("Dataset Overview:")
+    print(f"Total users analyzed: {len(df)}")
+
+    # Print comprehensive stats for each key metric
+    print_metric_stats("Matches", df['total_matches'])
+    print_metric_stats("Match Rate", df['match_rate'])
+    print_metric_stats("Messages Received per Match", df['messages_per_match'])
+    print_metric_stats("Response Rate", df['response_rate'])
+    print_metric_stats("Messages Sent", df['total_messages_sent'])
+    print_metric_stats("Messages Received", df['total_messages_received'])
+
+    # Age distribution
+    print("\nAge Distribution:")
+    print(f"  Mean Age: {df['age'].mean():.1f}")
+    print(f"  Median Age: {df['age'].median():.1f}")
+    print(f"  Std Dev Age: {df['age'].std():.1f}")
+
+    # Top users in different categories
     print("\nTop 10 Most Popular Users by Matches:")
+    print("(Showing: user_id, age, gender, city, total_matches, match_rate)")
     top_matches = df.nlargest(10, 'total_matches')[
         ['user_id', 'age', 'gender', 'city', 'total_matches', 'match_rate']
     ]
     print(top_matches.to_string(index=False))
 
     print("\nTop 10 Most Popular Users by Messages Received:")
+    print("(Showing: user_id, age, gender, city, messages_received, messages_per_match)")
     top_messages = df.nlargest(10, 'total_messages_received')[
         ['user_id', 'age', 'gender', 'city', 'total_messages_received', 'messages_per_match']
     ]
     print(top_messages.to_string(index=False))
 
     print("\nTop 10 Users by Response Rate (minimum 50 messages sent):")
+    print("(Showing: user_id, age, gender, city, response_rate, total_messages_sent)")
     response_rate = df[df['total_messages_sent'] >= 50].nlargest(10, 'response_rate')[
         ['user_id', 'age', 'gender', 'city', 'response_rate', 'total_messages_sent']
     ]
     print(response_rate.to_string(index=False))
+
+    # Additional engagement statistics
+    print("\nEngagement Statistics:")
+    active_users = df[df['total_messages_sent'] > 0]
+    print(f"  Active users (sent at least one message): {len(active_users)}")
+    highly_active = df[df['total_messages_sent'] > df['total_messages_sent'].mean()]
+    print(f"  Highly active users (above average messages sent): {len(highly_active)}")
+
+    # Success rate statistics
+    successful_users = df[df['response_rate'] > df['response_rate'].mean()]
+    print("\nSuccess Rate Statistics:")
+    print(f"  Users with above-average response rate: {len(successful_users)}")
+    print(f"  Percentage of users with above-average success: {(len(successful_users) / len(df)) * 100:.1f}%")
+
+    # Profile completeness correlation with success
+    print("\nProfile Features Impact:")
+    instagram_users = df[df['has_instagram'] == True]
+    non_instagram_users = df[df['has_instagram'] == False]
+    spotify_users = df[df['has_spotify'] == True]
+    non_spotify_users = df[df['has_spotify'] == False]
+
+    print("Instagram Impact:")
+    print(f"  Users with Instagram - Mean match rate: {instagram_users['match_rate'].mean():.2%}")
+    print(f"  Users without Instagram - Mean match rate: {non_instagram_users['match_rate'].mean():.2%}")
+
+    print("Spotify Impact:")
+    print(f"  Users with Spotify - Mean match rate: {spotify_users['match_rate'].mean():.2%}")
+    print(f"  Users without Spotify - Mean match rate: {non_spotify_users['match_rate'].mean():.2%}")
 
 
 def create_visualizations(df):
